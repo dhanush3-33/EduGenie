@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduGenie — AI Learning Assistant</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>EduGenie</h1>
+      <p class="subtitle">Gemini-powered learning assistant</p>
+    </header>
+
+    <form id="genie-form">
+      <label for="task">Choose a task</label>
+      <select id="task" name="task">
+        <option value="qa">Q&amp;A — Ask a question</option>
+        <option value="explain">Explain — Simplify a concept</option>
+        <option value="quiz">Quiz — 3 MCQs from a passage</option>
+        <option value="summarize">Summary — Summarize a passage</option>
+        <option value="recommend">Recommend Path — Learning plan</option>
+      </select>
+
+      <label for="input">Your input</label>
+      <textarea
+        id="input"
+        rows="8"
+        placeholder="Type a question, concept, passage, or topic here..."
+      ></textarea>
+
+      <button type="submit" id="submit-btn">Submit</button>
+    </form>
+
+    <div id="loading" class="hidden">Working on it…</div>
+    <div id="error" class="hidden" role="alert"></div>
+    <section id="result" aria-live="polite"></section>
+  </main>
+
+  <script>
+    const form = document.getElementById("genie-form");
+    const taskSelect = document.getElementById("task");
+    const inputEl = document.getElementById("input");
+    const submitBtn = document.getElementById("submit-btn");
+    const loadingEl = document.getElementById("loading");
+    const errorEl = document.getElementById("error");
+    const resultEl = document.getElementById("result");
+
+    // Map each dropdown task to its endpoint + request field + result key.
+    const TASK_CONFIG = {
+      qa: { url: "/qa", field: "question", key: "answer" },
+      explain: { url: "/explain", field: "concept", key: "explanation" },
+      quiz: { url: "/quiz", field: "passage", key: "quiz" },
+      summarize: { url: "/summarize", field: "text", key: "summary" },
+      recommend: { url: "/learn/recommendations", field: "topic", key: "learning_path" },
+    };
+
+    function setLoading(isLoading) {
+      loadingEl.classList.toggle("hidden", !isLoading);
+      submitBtn.disabled = isLoading;
+      submitBtn.textContent = isLoading ? "Loading…" : "Submit";
+    }
+
+    function showError(message) {
+      errorEl.textContent = message;
+      errorEl.classList.remove("hidden");
+    }
+
+    function clearOutput() {
+      errorEl.textContent = "";
+      errorEl.classList.add("hidden");
+      resultEl.innerHTML = "";
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function renderQuiz(quiz) {
+      let html = "<h2>Quiz</h2><ol>";
+      quiz.forEach((item) => {
+        html += `<li><p><strong>${escapeHtml(item.question)}</strong></p><ul>`;
+        item.options.forEach((opt) => {
+          const mark = opt === item.answer ? " (correct)" : "";
+          html += `<li>${escapeHtml(opt)}${mark}</li>`;
+        });
+        html += "</ul></li>";
+      });
+      html += "</ol>";
+      return html;
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearOutput();
+
+      const task = taskSelect.value;
+      const config = TASK_CONFIG[task];
+      const value = inputEl.value.trim();
+
+      if (!value) {
+        showError("Please enter some text before submitting.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await fetch(config.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [config.field]: value }),
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (e) {
+          throw new Error("Server returned a non-JSON response.");
+        }
+
+        if (!response.ok) {
+          const detail = data.detail || `Request failed (${response.status}).`;
+          throw new Error(detail);
+        }
+
+        const payload = data[config.key];
+        if (payload === undefined || payload === null || payload === "") {
+          throw new Error("Server returned an empty result.");
+        }
+
+        if (config.key === "quiz") {
+          resultEl.innerHTML = renderQuiz(payload);
+        } else {
+          resultEl.innerHTML =
+            "<h2>Result</h2><pre>" + escapeHtml(String(payload)) + "</pre>";
+        }
+      } catch (err) {
+        showError(err.message || "Something went wrong.");
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>
