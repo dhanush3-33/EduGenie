@@ -7,7 +7,7 @@ from google import genai
 
 load_dotenv()
 
-_MODEL_NAME = "gemini-2.0-flash"
+_MODEL_NAME = "gemini-3.6-flash"
 
 
 def _get_client() -> genai.Client:
